@@ -4,11 +4,17 @@ from itertools import count
 from terminaltables import AsciiTable
 from environs import Env
 
-env = Env()
-env.read_env()
-
+SEARCH_PERIOD = 30
+CITY_CODE = 1
+VACANTION_CATEGORY_ID = 48
+RESULTS_ON_PAGE = 100
 
 def main():
+    
+    env = Env()
+    env.read_env()
+    superJob_security_id = env('SUPERJOB_SECURITY_CODE')
+
     languages = [
         'Python',
         'Java',
@@ -21,53 +27,51 @@ def main():
         'PHP',
         'Ruby',
     ]
-
-    get_hh_salary(languages)
-    get_superjob_salary(languages)
-
+    print(get_hh_salary(languages))
+    print(get_superjob_salary(languages, superJob_security_id))
 
 
 def get_hh_salary(languages):
 
     url = "https://api.hh.ru/vacancies/"
     header = {'User-Agent': 'Nik_DVMN'}
-    hh_salary_info = {}
+    hh_salary = {}
 
     for language in languages:
         avr_salaries = []
         for page in count(0):
             params = {
-                "text": f" Программист {language}",
-                "area": 1,
-                "period": 30,
+                "text": f" {language}",
+                "area": CITY_CODE,
+                "period": SEARCH_PERIOD,
                 "page": page,
             }
             response = requests.get(url, headers=header, params=params)
             response.raise_for_status()
-            response_json = response.json()
+            response = response.json()
 
-            for vacantion in response_json['items']:
-                salary = predict_rub_salary_for_hh(vacantion['salary'])
+            for job in response['items']:
+                salary = predict_rub_salary_for_hh(job['salary'])
                 if salary:
                     avr_salaries.append(salary)
-            if page == response_json['pages']-1:
-                vacations_found = response_json['found']
+            if page == response['pages']-1:
+                vacations_found = response['found']
                 break
-        hh_salary_info[language] = {"vacancies_found": vacations_found,
-                                    "vacancies_processed": len(avr_salaries),
-                                    "average_salary": int(average(avr_salaries))
-                                    }
-    forPrint_salary_info = prepare_info_for_print_table(hh_salary_info)
-    salary_table = AsciiTable(forPrint_salary_info, title='HH Moscow')
-    print(salary_table.table)
+        hh_salary[language] = { "vacancies_found": vacations_found,
+                                "vacancies_processed": len(avr_salaries),
+                                "average_salary": int(average(avr_salaries))
+                               }
+    for_print_salary = prepare_for_print(hh_salary)
+    salary_table = AsciiTable(for_print_salary, title='HH Moscow')
+    return salary_table.table
 
 
-def get_superjob_salary(languages):
+def get_superjob_salary(languages, security_id):
     url = "https://api.superjob.ru/2.0/vacancies/"
     header = {
-        "X-Api-App-Id": env('SUPERJOB_SECURITY_CODE'),
+        "X-Api-App-Id": security_id,
     }
-    salary_info = {}
+    superJob_salary = {}
 
     for language in languages:
         avr_salaries = []
@@ -75,72 +79,68 @@ def get_superjob_salary(languages):
             params = {
                 "keyword": f"{language}",
                 "town": "Москва",
-                "catalogues": 48,
+                "catalogues": VACANTION_CATEGORY_ID,
                 "page": page,
-                "count": 100,
+                "count": RESULTS_ON_PAGE,
                 }
             response = requests.get(url, headers=header, params=params)
             response.raise_for_status()
-            response_json = response.json()
+            response = response.json()
 
-            if response_json["total"] == 0:
+            if not response["total"]:
                 break
 
-            for vacantion in response_json['objects']:
-                salary = predict_rub_salary_for_superjob(vacantion['payment_from'], vacantion['payment_to'])
+            for job in response['objects']:
+                salary = calculate_avg_salary(job['payment_from'], job['payment_to'])
                 if salary:
                     avr_salaries.append(salary)
 
-            if not response_json['more']:
+            if not response['more']:
                 break
 
-        if not response_json["total"] == 0:
-            salary_info[language] = {"vacancies_found": response_json["total"],
+        if response["total"]:
+            superJob_salary[language] = {"vacancies_found": response["total"],
                                     "vacancies_processed": len(avr_salaries),
                                     "average_salary": int(average(avr_salaries))
                                     }
 
-    forPrint_salary_info = prepare_info_for_print_table(salary_info)
-    salary_table = AsciiTable(forPrint_salary_info, title = 'SuperJob Moscow')
-    print(salary_table.table)
+    for_print_salary = prepare_for_print(superJob_salary)
+    salary_table = AsciiTable(for_print_salary, title = 'SuperJob Moscow')
+    return salary_table.table
 
 
-def predict_rub_salary_for_hh(salary_info_from_hh):
+def predict_rub_salary_for_hh(salary_hh):
 
-    if salary_info_from_hh == None:
+    if not salary_hh:
         return None
 
-    salary_from = salary_info_from_hh['from']
-    salary_to = salary_info_from_hh['to']
-    salary_currency = salary_info_from_hh['currency']
+    salary_from = salary_hh['from']
+    salary_to = salary_hh['to']
+    salary_currency = salary_hh['currency']
 
     if salary_currency != 'RUR':
         return None
-    elif salary_from and salary_to:
-        return (int(salary_from) + int(salary_to))/2
-    elif not salary_from:
-        return int(salary_to)*0.8
-    else:
-        return int(salary_from)*1.2
+    return calculate_avg_salary(salary_from, salary_to)
 
-def predict_rub_salary_for_superjob(salary_from, salary_to):
-    if salary_from == 0 and salary_to == 0:
+
+def calculate_avg_salary(salary_from, salary_to):
+    if not salary_from and not salary_to:
         return None
-    elif salary_from != 0 and salary_to != 0:
+    elif salary_from and salary_to:
         return (int(salary_from) + int(salary_to)) / 2
-    elif salary_from == 0:
+    elif not salary_from:
         return int(salary_to) * 0.8
-    elif salary_to == 0:
+    elif not salary_to:
         return int(salary_from) * 1.2
+    
 
+def prepare_for_print(salary_info):
 
-def prepare_info_for_print_table(salary_info):
-
-    outputTable = [["Язык", "Всего вакансий", "Использовано в расчете", "Средняя зарплата"],]
-    for language, vacantions  in salary_info.items():
-        tableLine = [language] + list(vacantions.values())
-        outputTable.append(tableLine)
-    return outputTable
+    output_table = [["Язык", "Всего вакансий", "Использовано в расчете", "Средняя зарплата"],]
+    for language, jobs  in salary_info.items():
+        table_line = [language] + list(jobs.values())
+        output_table.append(table_line)
+    return output_table
 
 
 if __name__ == "__main__":
