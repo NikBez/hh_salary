@@ -13,7 +13,7 @@ def main():
     
     env = Env()
     env.read_env()
-    SUPERJOB_SECURITY_ID = env('SUPERJOB_SECURITY_CODE')
+    superJob_security_id = env('SUPERJOB_SECURITY_CODE')
 
     languages = [
         'Python',
@@ -28,7 +28,7 @@ def main():
         'Ruby',
     ]
     print(get_hh_salary(languages))
-    print(get_superjob_salary(languages, SUPERJOB_SECURITY_ID))
+    print(get_superjob_salary(languages, superJob_security_id))
 
 
 def get_hh_salary(languages):
