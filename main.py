@@ -6,14 +6,14 @@ from environs import Env
 
 SEARCH_PERIOD = 30
 CITY_CODE = 1
-VACANTION_CATEGORY_ID = 48
+JOB_CATEGORY_ID = 48
 RESULTS_ON_PAGE = 100
 
 def main():
     
     env = Env()
     env.read_env()
-    superJob_security_id = env('SUPERJOB_SECURITY_CODE')
+    SUPERJOB_SECURITY_ID = env('SUPERJOB_SECURITY_CODE')
 
     languages = [
         'Python',
@@ -28,7 +28,7 @@ def main():
         'Ruby',
     ]
     print(get_hh_salary(languages))
-    print(get_superjob_salary(languages, superJob_security_id))
+    print(get_superjob_salary(languages, SUPERJOB_SECURITY_ID))
 
 
 def get_hh_salary(languages):
@@ -57,8 +57,8 @@ def get_hh_salary(languages):
             if page == response['pages']-1:
                 vacations_found = response['found']
                 break
-        hh_salary[language] = { "vacancies_found": vacations_found,
-                                "vacancies_processed": len(avr_salaries),
+        hh_salary[language] = { "jobs_found": vacations_found,
+                                "jobs_processed": len(avr_salaries),
                                 "average_salary": int(average(avr_salaries))
                                }
     for_print_salary = prepare_for_print(hh_salary)
@@ -79,7 +79,7 @@ def get_superjob_salary(languages, security_id):
             params = {
                 "keyword": f"{language}",
                 "town": "Москва",
-                "catalogues": VACANTION_CATEGORY_ID,
+                "catalogues": JOB_CATEGORY_ID,
                 "page": page,
                 "count": RESULTS_ON_PAGE,
                 }
@@ -99,10 +99,10 @@ def get_superjob_salary(languages, security_id):
                 break
 
         if response["total"]:
-            superJob_salary[language] = {"vacancies_found": response["total"],
-                                    "vacancies_processed": len(avr_salaries),
-                                    "average_salary": int(average(avr_salaries))
-                                    }
+            superJob_salary[language] = {"jobs_found": response["total"],
+                                         "jobs_processed": len(avr_salaries),
+                                         "average_salary": int(average(avr_salaries))
+                                        }
 
     for_print_salary = prepare_for_print(superJob_salary)
     salary_table = AsciiTable(for_print_salary, title = 'SuperJob Moscow')
@@ -134,10 +134,10 @@ def calculate_avg_salary(salary_from, salary_to):
         return int(salary_from) * 1.2
     
 
-def prepare_for_print(salary_info):
+def prepare_for_print(salary):
 
     output_table = [["Язык", "Всего вакансий", "Использовано в расчете", "Средняя зарплата"],]
-    for language, jobs  in salary_info.items():
+    for language, jobs in salary.items():
         table_line = [language] + list(jobs.values())
         output_table.append(table_line)
     return output_table
